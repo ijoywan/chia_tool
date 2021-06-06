@@ -1,12 +1,16 @@
 from blspy import G1Element, PrivateKey
 import hashlib
 import io
+from chia.ints import uint32
 from chia.bech32m import decode_puzzle_hash, encode_puzzle_hash
 from chia.program import Program, SerializedProgram
 from clvm_tools.binutils import assemble
 from clvm.more_ops import op_sha256, op_pubkey_for_exp, op_point_add
 from clvm.SExp import SExp, to_sexp_type
 from stages.stage_0 import run_program as run_program_assemble
+from chia.derive_keys import master_sk_to_wallet_sk
+
+private_key = bytes.fromhex("xxxxxx")
 
 DEFAULT_HIDDEN_PUZZLE_HASH = bytes.fromhex('711d6c4e32c92e53179b199484cf8c897542bc57f2b22582799f9d657eec4699')
 
@@ -52,12 +56,32 @@ def puzzle_for_pk(public_key: G1Element) -> Program:
     return MOD.curry(bytes(ck))
 
 
-def main():
-    pk = bytes.fromhex("88bc9360319e7c54ab42e19e974288a2d7a817976f7633f4b43f36ce72074e59c4ab8ddac362202f3e366f0aebbb6280")
-    ## xch1zj28av8xnm50eqnery8u95uvkjamvxaz3udzwr8avsaqart4j4mqzlmzl5
-    puzzle = puzzle_for_pk(pk).get_tree_hash()
-    address = encode_puzzle_hash(puzzle, 'xch')
-    print(address)
+def create_more_puzzle_hashes(private_key, start_index=0):
+    to_generate = 100
 
-if __name__  == '__main__':
-    main()
+    derivation_paths = []
+
+    for index in range(start_index, to_generate):
+
+        pubkey = master_sk_to_wallet_sk(private_key, uint32(index)).get_g1()
+        puzzle = puzzle_for_pk(bytes(pubkey))
+        if puzzle is None:
+            print(f"Unable to create puzzles with wallet")
+            break
+        puzzlehash = puzzle.get_tree_hash()
+        print(f"Puzzle at index {index} wallet puzzle hash {puzzlehash.hex()}")
+        derivation_paths.append(
+            {
+                "index": uint32(index),
+                "puzzle": puzzlehash,
+                "pubkey": pubkey
+            }
+        )
+    return derivation_paths
+
+
+
+if __name__ == '__main__':
+
+    pk = PrivateKey.from_bytes(private_key)
+    print(create_more_puzzle_hashes(pk, 0))
